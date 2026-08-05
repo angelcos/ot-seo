@@ -19,6 +19,12 @@ Aplicacion local para el taller SEO que permite:
 - Node.js 20+
 - npm 10+
 
+## Guia completa de instalacion en Windows
+
+Para despliegue en PC del taller con servicio Windows (NSSM), hostname local y script de actualizacion:
+
+- [INSTALACION_WINDOWS_NSSM.md](INSTALACION_WINDOWS_NSSM.md)
+
 ## Instalacion
 
 ```bash
@@ -72,49 +78,3 @@ npm run start:lan
 - Base de datos local en `prisma/dev.db`.
 - Logo usado para PDF: `public/seo-logo.jpg`.
 - Plantilla OT usada por el PDF: `public/ot-seo-clean.png`.
-
-## Publicar en GitHub (repositorio publico)
-
-Antes del primer push:
-
-- Mantener `tmp/`, `prisma/prisma/dev.db`, `.env` y `.next/` fuera del repositorio (ya estan ignorados).
-- Revisar que no haya datos reales de clientes en archivos sueltos del proyecto.
-
-Pasos sugeridos:
-
-```bash
-git init
-git add .
-git commit -m "Initial commit"
-git branch -M main
-git remote add origin https://github.com/TU_USUARIO/TU_REPO.git
-git push -u origin main
-```
-
-## Usar cuenta personal y de empresa en el mismo equipo
-
-Si ya tienes cuenta de empresa configurada, puedes usar una identidad distinta solo para este proyecto.
-
-Configurar identidad local (solo en esta carpeta):
-
-```bash
-git config user.name "Tu Nombre Personal"
-git config user.email "tu_correo_personal@ejemplo.com"
-```
-
-Comprobar identidad activa en este proyecto:
-
-```bash
-git config user.name
-git config user.email
-```
-
-Opcional recomendado para no mezclar credenciales SSH:
-
-- Crear dos claves SSH (empresa y personal).
-- Definir alias en `~/.ssh/config` (por ejemplo `github-work` y `github-personal`).
-- En este proyecto usar remote con alias personal:
-
-```bash
-git remote set-url origin git@github-personal:TU_USUARIO/TU_REPO.git
-```
