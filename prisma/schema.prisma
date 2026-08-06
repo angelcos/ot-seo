@@ -12,6 +12,7 @@ enum WorkOrderStatus {
   IN_PROGRESS
   DONE
   DELIVERED
+  CANCELED
 }
 
 model WorkOrder {
@@ -28,14 +29,28 @@ model WorkOrder {
   assignedMechanic String          @default("")
   issueDescription String?
   status           WorkOrderStatus @default(PENDING)
+  timeEntries      WorkTimeEntry[]
+}
+
+model WorkTimeEntry {
+  id            Int       @id @default(autoincrement())
+  createdAt     DateTime  @default(now())
+  workOrderId   Int
+  workOrder     WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  mechanicName  String
+  date          DateTime
+  actualHours   Float
+  billableHours Float
+  notes         String?
 }
 
 model Mechanic {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 Int      @id @default(autoincrement())
+  name               String   @unique
+  isActive           Boolean  @default(true)
+  dailyCapacityHours Float    @default(8.0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 model Brand {

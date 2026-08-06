@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { createCatalogEntrySchema } from "@/lib/work-orders";
+import { createCatalogEntrySchema, normalizeCatalogNameKey } from "@/lib/work-orders";
 
 export async function GET() {
   const brands = await prisma.brand.findMany({
@@ -22,9 +22,25 @@ export async function POST(request: Request) {
     );
   }
 
+  const normalizedName = parsed.data.name.trim().replace(/\s+/g, " ");
+
+  const existingBrands = await prisma.brand.findMany({
+    select: { id: true, name: true },
+  });
+  const duplicatedBrand = existingBrands.find(
+    (brand) => normalizeCatalogNameKey(brand.name) === normalizeCatalogNameKey(normalizedName),
+  );
+
+  if (duplicatedBrand) {
+    return NextResponse.json(
+      { message: "Ya existe una marca con ese nombre. No se distingue entre mayusculas y minusculas." },
+      { status: 409 },
+    );
+  }
+
   try {
     const brand = await prisma.brand.create({
-      data: { name: parsed.data.name.trim() },
+      data: { name: normalizedName },
     });
 
     return NextResponse.json(brand, { status: 201 });

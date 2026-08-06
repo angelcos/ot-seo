@@ -14,8 +14,19 @@ export function ConfigurationApp({
   const [mechanics, setMechanics] = useState(initialMechanics);
   const [brands, setBrands] = useState(initialBrands);
   const [mechanicName, setMechanicName] = useState("");
+  const [mechanicCapacity, setMechanicCapacity] = useState("8");
+  const [editingMechanicId, setEditingMechanicId] = useState<number | null>(null);
   const [brandName, setBrandName] = useState("");
+  const [editingBrandId, setEditingBrandId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<{
+    kind: "mechanic" | "brand";
+    id: number;
+    name: string;
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const normalizedBrandPreview = brandName.trim().replace(/\s+/g, " ");
+  const brandLooksComposite = normalizedBrandPreview.split(" ").filter(Boolean).length >= 2;
 
   async function refreshCatalogs() {
     const [mechanicsResponse, brandsResponse] = await Promise.all([
@@ -38,23 +49,53 @@ export function ConfigurationApp({
       return;
     }
 
+    const normalizedHours = Number(mechanicCapacity);
+    if (Number.isNaN(normalizedHours) || normalizedHours <= 0) {
+      setError("La capacidad diaria debe ser mayor a 0");
+      return;
+    }
+
     try {
-      const response = await fetch("/api/mechanics", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
+      const response = await fetch(
+        editingMechanicId ? `/api/mechanics/${editingMechanicId}` : "/api/mechanics",
+        {
+          method: editingMechanicId ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, dailyCapacityHours: normalizedHours }),
+        },
+      );
 
       if (!response.ok) {
         const payload = (await response.json()) as { message?: string };
-        throw new Error(payload.message ?? "No se pudo crear el mecanico");
+        throw new Error(
+          payload.message ??
+            (editingMechanicId
+              ? "No se pudo actualizar el mecanico"
+              : "No se pudo crear el mecanico"),
+        );
       }
 
       setMechanicName("");
+      setMechanicCapacity("8");
+      setEditingMechanicId(null);
       await refreshCatalogs();
     } catch (catalogError) {
       setError(catalogError instanceof Error ? catalogError.message : "Error al guardar mecanico");
     }
+  }
+
+  function startEditMechanic(item: MechanicDTO) {
+    setEditingMechanicId(item.id);
+    setMechanicName(item.name);
+    setMechanicCapacity(String(item.dailyCapacityHours));
+    setError(null);
+  }
+
+  function cancelEditMechanic() {
+    setEditingMechanicId(null);
+    setMechanicName("");
+    setMechanicCapacity("8");
+    setError(null);
   }
 
   async function toggleMechanic(id: number, isActive: boolean) {
@@ -75,6 +116,23 @@ export function ConfigurationApp({
     }
   }
 
+  async function deleteMechanic(id: number) {
+    try {
+      const response = await fetch(`/api/mechanics/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json()) as { message?: string };
+        throw new Error(payload.message ?? "No se pudo eliminar el mecanico");
+      }
+
+      await refreshCatalogs();
+    } catch (catalogError) {
+      setError(catalogError instanceof Error ? catalogError.message : "Error al eliminar mecanico");
+    }
+  }
+
   async function addBrand(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = brandName.trim();
@@ -83,22 +141,37 @@ export function ConfigurationApp({
     }
 
     try {
-      const response = await fetch("/api/brands", {
-        method: "POST",
+      const response = await fetch(editingBrandId ? `/api/brands/${editingBrandId}` : "/api/brands", {
+        method: editingBrandId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       });
 
       if (!response.ok) {
         const payload = (await response.json()) as { message?: string };
-        throw new Error(payload.message ?? "No se pudo crear la marca");
+        throw new Error(
+          payload.message ?? (editingBrandId ? "No se pudo actualizar la marca" : "No se pudo crear la marca"),
+        );
       }
 
       setBrandName("");
+      setEditingBrandId(null);
       await refreshCatalogs();
     } catch (catalogError) {
       setError(catalogError instanceof Error ? catalogError.message : "Error al guardar marca");
     }
+  }
+
+  function startEditBrand(item: BrandDTO) {
+    setEditingBrandId(item.id);
+    setBrandName(item.name);
+    setError(null);
+  }
+
+  function cancelEditBrand() {
+    setEditingBrandId(null);
+    setBrandName("");
+    setError(null);
   }
 
   async function toggleBrand(id: number, isActive: boolean) {
@@ -119,6 +192,37 @@ export function ConfigurationApp({
     }
   }
 
+  async function deleteBrand(id: number) {
+    try {
+      const response = await fetch(`/api/brands/${id}`, { method: "DELETE" });
+      if (!response.ok) {
+        const payload = (await response.json()) as { message?: string };
+        throw new Error(payload.message ?? "No se pudo eliminar la marca");
+      }
+      await refreshCatalogs();
+    } catch (catalogError) {
+      setError(catalogError instanceof Error ? catalogError.message : "Error al eliminar marca");
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteDialog) {
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+      if (deleteDialog.kind === "mechanic") {
+        await deleteMechanic(deleteDialog.id);
+      } else {
+        await deleteBrand(deleteDialog.id);
+      }
+      setDeleteDialog(null);
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 md:px-8">
       <header className="rounded-3xl border border-cyan-200 bg-[linear-gradient(130deg,#5f969c_0%,#8bc4cb_100%)] px-6 py-7 text-white">
@@ -128,7 +232,7 @@ export function ConfigurationApp({
             <h1 className="mt-2 text-3xl font-semibold">Configuracion</h1>
             <p className="mt-2 text-sm text-cyan-50">Gestiona mecanicos y marcas del formulario.</p>
           </div>
-          <Link href="/" className="rounded-xl border border-white/30 bg-white/15 px-4 py-2 text-sm font-semibold text-white hover:bg-white/25">
+          <Link href="/" className="rounded-xl border border-cyan-800/40 bg-white/90 px-4 py-2 text-sm font-semibold text-cyan-900 transition hover:bg-white">
             Volver a OT
           </Link>
         </div>
@@ -139,18 +243,18 @@ export function ConfigurationApp({
       ) : null}
 
       <section className="grid gap-5 md:grid-cols-2">
-        <CatalogPanel
-          title="Mecanicos"
-          placeholder="Nuevo mecanico"
-          value={mechanicName}
-          onChange={setMechanicName}
+        <MechanicPanel
+          mechanics={mechanics}
+          mechanicName={mechanicName}
+          mechanicCapacity={mechanicCapacity}
+          onNameChange={setMechanicName}
+          onCapacityChange={setMechanicCapacity}
           onSubmit={addMechanic}
-          items={mechanics.map((item) => ({
-            id: item.id,
-            name: item.name,
-            isActive: item.isActive,
-            onToggle: () => toggleMechanic(item.id, item.isActive),
-          }))}
+          editingMechanicId={editingMechanicId}
+          onCancelEdit={cancelEditMechanic}
+          onToggle={toggleMechanic}
+          onEdit={startEditMechanic}
+          onDelete={(id, name) => setDeleteDialog({ kind: "mechanic", id, name })}
         />
 
         <CatalogPanel
@@ -159,15 +263,139 @@ export function ConfigurationApp({
           value={brandName}
           onChange={setBrandName}
           onSubmit={addBrand}
+          editingBrandId={editingBrandId}
+          onCancelEdit={cancelEditBrand}
+          helperText="Usa solo la marca. El modelo se informa en la OT."
+          warningText={brandLooksComposite ? "Revisa si has escrito marca y modelo juntos. Marcas compuestas reales como Alfa Romeo o Aston Martin si son validas." : null}
           items={brands.map((item) => ({
             id: item.id,
             name: item.name,
             isActive: item.isActive,
             onToggle: () => toggleBrand(item.id, item.isActive),
+            onEdit: () => startEditBrand(item),
+            onDelete: () => setDeleteDialog({ kind: "brand", id: item.id, name: item.name }),
           }))}
         />
       </section>
+
+      {deleteDialog ? (
+        <DeleteConfirmModal
+          title={deleteDialog.kind === "mechanic" ? "Eliminar mecanico" : "Eliminar marca"}
+          name={deleteDialog.name}
+          isDeleting={isDeleting}
+          onCancel={() => {
+            if (!isDeleting) {
+              setDeleteDialog(null);
+            }
+          }}
+          onConfirm={() => void confirmDelete()}
+        />
+      ) : null}
     </div>
+  );
+}
+
+
+function MechanicPanel({
+  mechanics,
+  mechanicName,
+  mechanicCapacity,
+  onNameChange,
+  onCapacityChange,
+  onSubmit,
+  editingMechanicId,
+  onCancelEdit,
+  onToggle,
+  onEdit,
+  onDelete,
+}: {
+  mechanics: import("@/lib/work-orders").MechanicDTO[];
+  mechanicName: string;
+  mechanicCapacity: string;
+  onNameChange: (v: string) => void;
+  onCapacityChange: (v: string) => void;
+  onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
+  editingMechanicId: number | null;
+  onCancelEdit: () => void;
+  onToggle: (id: number, isActive: boolean) => void;
+  onEdit: (item: MechanicDTO) => void;
+  onDelete: (id: number, name: string) => void;
+}) {
+  return (
+    <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 className="text-xl font-semibold text-slate-900">Mecanicos</h2>
+      <form className="mt-4 grid grid-cols-2 gap-2" onSubmit={onSubmit}>
+        <input
+          className="col-span-2 rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-cyan-600"
+          placeholder="Nombre del mecanico"
+          value={mechanicName}
+          onChange={(e) => onNameChange(e.target.value)}
+          required
+        />
+        <label className="grid gap-1 text-xs text-slate-600">
+          <span>Horas/dia disponibles</span>
+          <input type="number" min="1" max="24" step="0.5"
+            className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-cyan-600"
+            value={mechanicCapacity}
+            onChange={(e) => onCapacityChange(e.target.value)}
+          />
+        </label>
+        <div className="flex items-end">
+          <button className="w-full rounded-xl bg-cyan-700 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-800" type="submit">
+            {editingMechanicId ? "Actualizar" : "Agregar"}
+          </button>
+        </div>
+        {editingMechanicId ? (
+          <button
+            type="button"
+            onClick={onCancelEdit}
+            className="col-span-2 rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Cancelar
+          </button>
+        ) : null}
+      </form>
+      <ul className="mt-4 space-y-2">
+        {mechanics.map((item) => (
+          <li key={item.id} className="rounded-xl border border-slate-200 px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm text-slate-800">{item.name}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500">{item.dailyCapacityHours}h/dia</span>
+                <button
+                  type="button"
+                  onClick={() => onEdit(item)}
+                  className="rounded-lg px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
+                >
+                  Editar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onToggle(item.id, item.isActive)}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${
+                    item.isActive
+                      ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                      : "bg-slate-200 text-slate-600 hover:bg-slate-300"
+                  }`}
+                >
+                  {item.isActive ? "Activo" : "Baja"}
+                </button>
+                {!item.isActive ? (
+                  <button
+                    type="button"
+                    onClick={() => onDelete(item.id, item.name)}
+                    className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
+                    title="Esta accion no se puede deshacer"
+                  >
+                    Eliminar
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </article>
   );
 }
 
@@ -177,6 +405,10 @@ function CatalogPanel({
   value,
   onChange,
   onSubmit,
+  editingBrandId,
+  onCancelEdit,
+  helperText,
+  warningText,
   items,
 }: {
   title: string;
@@ -184,40 +416,134 @@ function CatalogPanel({
   value: string;
   onChange: (value: string) => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
-  items: Array<{ id: number; name: string; isActive: boolean; onToggle: () => void }>;
+  editingBrandId: number | null;
+  onCancelEdit: () => void;
+  helperText?: string;
+  warningText?: string | null;
+  items: Array<{
+    id: number;
+    name: string;
+    isActive: boolean;
+    onToggle: () => void;
+    onEdit: () => void;
+    onDelete: () => void;
+  }>;
 }) {
   return (
     <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
-      <form className="mt-4 flex gap-2" onSubmit={onSubmit}>
-        <input
-          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-cyan-600"
-          placeholder={placeholder}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-        />
-        <button className="rounded-xl bg-cyan-700 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-800" type="submit">
-          Agregar
-        </button>
+      <form className="mt-4 grid gap-2" onSubmit={onSubmit}>
+        <div className="flex gap-2">
+          <input
+            className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-cyan-600"
+            placeholder={placeholder}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+          />
+          <button className="rounded-xl bg-cyan-700 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-800" type="submit">
+            {editingBrandId ? "Actualizar" : "Agregar"}
+          </button>
+          {editingBrandId ? (
+            <button
+              type="button"
+              onClick={onCancelEdit}
+              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Cancelar
+            </button>
+          ) : null}
+        </div>
+        {helperText ? <p className="text-xs text-slate-500">{helperText}</p> : null}
+        {warningText ? (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            {warningText}
+          </p>
+        ) : null}
       </form>
       <ul className="mt-4 space-y-2">
         {items.map((item) => (
-          <li key={item.id} className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2">
-            <span className="text-sm text-slate-800">{item.name}</span>
-            <button
-              type="button"
-              onClick={item.onToggle}
-              className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${
-                item.isActive
-                  ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                  : "bg-slate-200 text-slate-600 hover:bg-slate-300"
-              }`}
-            >
-              {item.isActive ? "Activo" : "Baja"}
-            </button>
+          <li key={item.id} className="rounded-xl border border-slate-200 px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm text-slate-800">{item.name}</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={item.onEdit}
+                  className="rounded-lg px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
+                >
+                  Editar
+                </button>
+                <button
+                  type="button"
+                  onClick={item.onToggle}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${
+                    item.isActive
+                      ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                      : "bg-slate-200 text-slate-600 hover:bg-slate-300"
+                  }`}
+                >
+                  {item.isActive ? "Activo" : "Baja"}
+                </button>
+                {!item.isActive ? (
+                  <button
+                    type="button"
+                    onClick={item.onDelete}
+                    className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
+                    title="Esta accion no se puede deshacer"
+                  >
+                    Eliminar
+                  </button>
+                ) : null}
+              </div>
+            </div>
           </li>
         ))}
       </ul>
     </article>
+  );
+}
+
+function DeleteConfirmModal({
+  title,
+  name,
+  isDeleting,
+  onCancel,
+  onConfirm,
+}: {
+  title: string;
+  name: string;
+  isDeleting: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/55 p-4">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
+        <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+        <p className="mt-2 text-sm text-slate-600">
+          Vas a eliminar definitivamente <strong>&quot;{name}&quot;</strong>.
+        </p>
+        <p className="mt-1 text-sm text-red-700">Esta accion no se puede deshacer.</p>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isDeleting}
+            className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isDeleting}
+            className="rounded-xl bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isDeleting ? "Eliminando..." : "Eliminar"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

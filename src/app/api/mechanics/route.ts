@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { createCatalogEntrySchema } from "@/lib/work-orders";
+import { createCatalogEntrySchema, normalizeCatalogNameKey } from "@/lib/work-orders";
 
 export async function GET() {
   const mechanics = await prisma.mechanic.findMany({
@@ -22,9 +22,30 @@ export async function POST(request: Request) {
     );
   }
 
+  const normalizedName = parsed.data.name.trim().replace(/\s+/g, " ");
+
+  const existingMechanics = await prisma.mechanic.findMany({
+    select: { id: true, name: true },
+  });
+  const duplicatedMechanic = existingMechanics.find(
+    (mechanic) => normalizeCatalogNameKey(mechanic.name) === normalizeCatalogNameKey(normalizedName),
+  );
+
+  if (duplicatedMechanic) {
+    return NextResponse.json(
+      { message: "Ya existe un mecanico con ese nombre. No se distingue entre mayusculas y minusculas." },
+      { status: 409 },
+    );
+  }
+
   try {
     const mechanic = await prisma.mechanic.create({
-      data: { name: parsed.data.name.trim() },
+      data: {
+        name: normalizedName,
+        ...(parsed.data.dailyCapacityHours !== undefined
+          ? { dailyCapacityHours: parsed.data.dailyCapacityHours }
+          : {}),
+      },
     });
 
     return NextResponse.json(mechanic, { status: 201 });

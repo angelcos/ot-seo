@@ -2,23 +2,25 @@ import { WorkOrdersApp } from "@/components/work-orders-app";
 import { prisma } from "@/lib/prisma";
 import { formatWorkOrderNumber } from "@/lib/work-orders";
 
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
-  const [orders, mechanics, brands] = await Promise.all([
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+  const [orders, mechanics, brands, totalCount] = await Promise.all([
     prisma.workOrder.findMany({
-      orderBy: {
-        createdAt: "desc",
-      },
+      where: { createdAt: { gte: sixMonthsAgo } },
+      orderBy: { createdAt: "desc" },
+      include: { timeEntries: { select: { actualHours: true, billableHours: true } } },
     }),
     prisma.mechanic.findMany({
-      orderBy: {
-        name: "asc",
-      },
+      orderBy: { name: "asc" },
     }),
     prisma.brand.findMany({
-      orderBy: {
-        name: "asc",
-      },
+      orderBy: { name: "asc" },
     }),
+    prisma.workOrder.count(),
   ]);
 
   const initialOrders = orders.map((order) => ({
@@ -31,9 +33,13 @@ export default async function Home() {
     vehicleBrand: order.vehicleBrand,
     vehicleModel: order.vehicleModel,
     vehicleYear: order.vehicleYear,
+    mileage: order.mileage,
     assignedMechanic: order.assignedMechanic,
     issueDescription: order.issueDescription,
     status: order.status,
+    timeEntriesCount: order.timeEntries.length,
+    timeEntriesActualHours: order.timeEntries.reduce((s, e) => s + e.actualHours, 0),
+    timeEntriesBillableHours: order.timeEntries.reduce((s, e) => s + e.billableHours, 0),
   }));
 
   return (
@@ -41,6 +47,7 @@ export default async function Home() {
       initialOrders={initialOrders}
       initialMechanics={mechanics}
       initialBrands={brands}
+      totalOrderCount={totalCount}
     />
   );
 }
