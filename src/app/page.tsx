@@ -1,6 +1,7 @@
 import { WorkOrdersApp } from "@/components/work-orders-app";
 import { prisma } from "@/lib/prisma";
 import { formatWorkOrderNumber } from "@/lib/work-orders";
+import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
 
@@ -43,11 +44,13 @@ export default async function Home() {
   }));
 
   return (
-    <WorkOrdersApp
-      initialOrders={initialOrders}
-      initialMechanics={mechanics}
-      initialBrands={brands}
-      totalOrderCount={totalCount}
-    />
+    <Suspense>
+      <WorkOrdersApp
+        initialOrders={initialOrders}
+        initialMechanics={mechanics}
+        initialBrands={brands}
+        totalOrderCount={totalCount}
+      />
+    </Suspense>
   );
 }

@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import type { BrandDTO, MechanicDTO } from "@/lib/work-orders";
+import { IndustrialAlert, IndustrialButton, IndustrialHeader, IndustrialHeaderActionLink, IndustrialInput } from "./ui/industrial-ui";
 
 export function ConfigurationApp({
   initialMechanics,
@@ -224,23 +224,18 @@ export function ConfigurationApp({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 md:px-8">
-      <header className="rounded-3xl border border-cyan-200 bg-[linear-gradient(130deg,#5f969c_0%,#8bc4cb_100%)] px-6 py-7 text-white">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-cyan-100">SEO MECANICA</p>
-            <h1 className="mt-2 text-3xl font-semibold">Configuracion</h1>
-            <p className="mt-2 text-sm text-cyan-50">Gestiona mecanicos y marcas del formulario.</p>
-          </div>
-          <Link href="/" className="rounded-xl border border-cyan-800/40 bg-white/90 px-4 py-2 text-sm font-semibold text-cyan-900 transition hover:bg-white">
-            Volver a OT
-          </Link>
-        </div>
-      </header>
+    <div className="mx-auto flex w-full max-w-6xl flex-col">
+      <IndustrialHeader
+        title="Configuracion"
+        actions={(
+          <IndustrialHeaderActionLink href="/">
+            ← Volver a OT
+          </IndustrialHeaderActionLink>
+        )}
+      />
+      <div className="mx-4 flex flex-col gap-6 py-6 md:mx-8">
 
-      {error ? (
-        <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
-      ) : null}
+      {error ? <IndustrialAlert variant="danger">{error}</IndustrialAlert> : null}
 
       <section className="grid gap-5 md:grid-cols-2">
         <MechanicPanel
@@ -291,6 +286,7 @@ export function ConfigurationApp({
           onConfirm={() => void confirmDelete()}
         />
       ) : null}
+      </div>
     </div>
   );
 }
@@ -324,36 +320,39 @@ function MechanicPanel({
   return (
     <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <h2 className="text-xl font-semibold text-slate-900">Mecanicos</h2>
-      <form className="mt-4 grid grid-cols-2 gap-2" onSubmit={onSubmit}>
-        <input
-          className="col-span-2 rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-cyan-600"
-          placeholder="Nombre del mecanico"
-          value={mechanicName}
-          onChange={(e) => onNameChange(e.target.value)}
-          required
-        />
-        <label className="grid gap-1 text-xs text-slate-600">
-          <span>Horas/dia disponibles</span>
-          <input type="number" min="1" max="24" step="0.5"
-            className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-cyan-600"
+      <form className="mt-4 flex gap-2" onSubmit={onSubmit}>
+        <div className="flex flex-1 flex-col gap-2">
+          <IndustrialInput
+            placeholder="Nombre del mecanico"
+            value={mechanicName}
+            onChange={(e) => onNameChange(e.target.value)}
+            required
+          />
+          <IndustrialInput
+            label="Horas/dia disponibles"
+            type="number"
+            min="1"
+            max="24"
+            step="0.5"
             value={mechanicCapacity}
             onChange={(e) => onCapacityChange(e.target.value)}
           />
-        </label>
-        <div className="flex items-end">
-          <button className="w-full rounded-xl bg-cyan-700 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-800" type="submit">
-            {editingMechanicId ? "Actualizar" : "Agregar"}
-          </button>
         </div>
-        {editingMechanicId ? (
-          <button
-            type="button"
-            onClick={onCancelEdit}
-            className="col-span-2 rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            Cancelar
-          </button>
-        ) : null}
+        <div className="flex flex-col gap-2">
+          <IndustrialButton variant="primary" size="md" type="submit">
+            {editingMechanicId ? "Actualizar" : "Agregar"}
+          </IndustrialButton>
+          {editingMechanicId ? (
+            <IndustrialButton
+              type="button"
+              onClick={onCancelEdit}
+              variant="secondary"
+              size="md"
+            >
+              Cancelar
+            </IndustrialButton>
+          ) : null}
+        </div>
       </form>
       <ul className="mt-4 space-y-2">
         {mechanics.map((item) => (
@@ -362,13 +361,15 @@ function MechanicPanel({
               <span className="text-sm text-slate-800">{item.name}</span>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-slate-500">{item.dailyCapacityHours}h/dia</span>
-                <button
+                <IndustrialButton
                   type="button"
                   onClick={() => onEdit(item)}
-                  className="rounded-lg px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
+                  variant="ghost"
+                  size="sm"
+                  className="px-2 py-1 text-xs text-slate-600"
                 >
                   Editar
-                </button>
+                </IndustrialButton>
                 <button
                   type="button"
                   onClick={() => onToggle(item.id, item.isActive)}
@@ -381,14 +382,16 @@ function MechanicPanel({
                   {item.isActive ? "Activo" : "Baja"}
                 </button>
                 {!item.isActive ? (
-                  <button
+                  <IndustrialButton
                     type="button"
                     onClick={() => onDelete(item.id, item.name)}
-                    className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
+                    variant="danger"
+                    size="sm"
+                    className="border-red-200 bg-red-50 px-2.5 py-1 text-xs text-red-700 hover:bg-red-100"
                     title="Esta accion no se puede deshacer"
                   >
                     Eliminar
-                  </button>
+                  </IndustrialButton>
                 ) : null}
               </div>
             </div>
@@ -434,31 +437,28 @@ function CatalogPanel({
       <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
       <form className="mt-4 grid gap-2" onSubmit={onSubmit}>
         <div className="flex gap-2">
-          <input
-            className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-cyan-600"
+          <IndustrialInput
+            className="w-full"
             placeholder={placeholder}
             value={value}
             onChange={(event) => onChange(event.target.value)}
           />
-          <button className="rounded-xl bg-cyan-700 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-800" type="submit">
+          <IndustrialButton variant="primary" size="md" type="submit">
             {editingBrandId ? "Actualizar" : "Agregar"}
-          </button>
+          </IndustrialButton>
           {editingBrandId ? (
-            <button
+            <IndustrialButton
               type="button"
               onClick={onCancelEdit}
-              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              variant="secondary"
+              size="md"
             >
               Cancelar
-            </button>
+            </IndustrialButton>
           ) : null}
         </div>
         {helperText ? <p className="text-xs text-slate-500">{helperText}</p> : null}
-        {warningText ? (
-          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            {warningText}
-          </p>
-        ) : null}
+        {warningText ? <IndustrialAlert variant="warning" className="text-xs">{warningText}</IndustrialAlert> : null}
       </form>
       <ul className="mt-4 space-y-2">
         {items.map((item) => (
@@ -466,13 +466,15 @@ function CatalogPanel({
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm text-slate-800">{item.name}</span>
               <div className="flex items-center gap-2">
-                <button
+                <IndustrialButton
                   type="button"
                   onClick={item.onEdit}
-                  className="rounded-lg px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
+                  variant="ghost"
+                  size="sm"
+                  className="px-2 py-1 text-xs text-slate-600"
                 >
                   Editar
-                </button>
+                </IndustrialButton>
                 <button
                   type="button"
                   onClick={item.onToggle}
@@ -485,14 +487,16 @@ function CatalogPanel({
                   {item.isActive ? "Activo" : "Baja"}
                 </button>
                 {!item.isActive ? (
-                  <button
+                  <IndustrialButton
                     type="button"
                     onClick={item.onDelete}
-                    className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
+                    variant="danger"
+                    size="sm"
+                    className="border-red-200 bg-red-50 px-2.5 py-1 text-xs text-red-700 hover:bg-red-100"
                     title="Esta accion no se puede deshacer"
                   >
                     Eliminar
-                  </button>
+                  </IndustrialButton>
                 ) : null}
               </div>
             </div>
@@ -526,22 +530,26 @@ function DeleteConfirmModal({
         <p className="mt-1 text-sm text-red-700">Esta accion no se puede deshacer.</p>
 
         <div className="mt-5 flex justify-end gap-2">
-          <button
+          <IndustrialButton
             type="button"
             onClick={onCancel}
             disabled={isDeleting}
-            className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            variant="secondary"
+            size="md"
+            className="font-medium"
           >
             Cancelar
-          </button>
-          <button
+          </IndustrialButton>
+          <IndustrialButton
             type="button"
             onClick={onConfirm}
             disabled={isDeleting}
-            className="rounded-xl bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60"
+            variant="danger"
+            size="md"
+            className="border-0 bg-red-700 text-white hover:bg-red-800"
           >
             {isDeleting ? "Eliminando..." : "Eliminar"}
-          </button>
+          </IndustrialButton>
         </div>
       </div>
     </div>

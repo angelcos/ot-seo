@@ -63,8 +63,12 @@ export async function GET(request: Request) {
     ? localIsoDate(new Date(from.getFullYear(), from.getMonth() + 1, 1))
     : localIsoDate(addDays(from, 7));
 
-  const [entries, mechanics] = await Promise.all([
+  const [entries, quickEntries, mechanics] = await Promise.all([
     prisma.workTimeEntry.findMany({
+      where: { date: { gte: from, lte: entriesTo } },
+      orderBy: { date: "asc" },
+    }),
+    prisma.quickEntry.findMany({
       where: { date: { gte: from, lte: entriesTo } },
       orderBy: { date: "asc" },
     }),
@@ -103,8 +107,17 @@ export async function GET(request: Request) {
     }
   }
 
+  // Normalize mechanic names (guard against case drift between entries and mechanics table)
+  const nameNorm = new Map(mechanics.map((m) => [m.name.toLowerCase(), m.name]));
+  const normName = (n: string) => nameNorm.get(n.toLowerCase()) ?? n;
+
   // Aggregate entries into day slots
-  for (const entry of entries) {
+  const allEntries = [
+    ...entries.map((e) => ({ ...e, source: "wte" as const })),
+    ...quickEntries.map((e) => ({ ...e, workOrderId: 0, source: "qe" as const })),
+  ];
+
+  for (const entry of allEntries) {
     const entryDate = localIsoDate(entry.date);
     let slot: typeof days[0] | undefined;
 
@@ -116,17 +129,22 @@ export async function GET(request: Request) {
     }
 
     if (!slot) continue;
-    const mech = slot.byMechanic[entry.mechanicName] ?? { actual: 0, billable: 0 };
+    const canonical = normName(entry.mechanicName);
+    const mech = slot.byMechanic[canonical] ?? { actual: 0, billable: 0 };
     mech.actual += entry.actualHours;
     mech.billable += entry.billableHours;
-    slot.byMechanic[entry.mechanicName] = mech;
+    slot.byMechanic[canonical] = mech;
   }
 
   // Mechanic totals for the period
   const mechanicTotals = mechanics.map((m) => {
-    const total = entries
-      .filter((e) => e.mechanicName === m.name)
+    const wteTotal = entries
+      .filter((e) => normName(e.mechanicName) === m.name)
       .reduce((acc, e) => ({ actual: acc.actual + e.actualHours, billable: acc.billable + e.billableHours }), { actual: 0, billable: 0 });
+    const qeTotal = quickEntries
+      .filter((e) => normName(e.mechanicName) === m.name)
+      .reduce((acc, e) => ({ actual: acc.actual + e.actualHours, billable: acc.billable + e.billableHours }), { actual: 0, billable: 0 });
+    const total = { actual: wteTotal.actual + qeTotal.actual, billable: wteTotal.billable + qeTotal.billable };
 
     // Count working days in range (Mon–Fri)
     let workingDays = 0;

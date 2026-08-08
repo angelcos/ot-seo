@@ -46,6 +46,9 @@ export async function PATCH(
   }
 
   try {
+    const current = await prisma.mechanic.findUnique({ where: { id: parsedId }, select: { name: true } });
+    const oldName = current?.name;
+
     const mechanic = await prisma.mechanic.update({
       where: { id: parsedId },
       data: {
@@ -56,6 +59,26 @@ export async function PATCH(
           : {}),
       },
     });
+
+    // Cascade name change to all tables that reference the mechanic by name
+    if (normalizedName !== undefined && oldName && oldName !== normalizedName) {
+      const [distinctWO, distinctTE, distinctQE] = await Promise.all([
+        prisma.workOrder.findMany({ select: { assignedMechanic: true }, distinct: ["assignedMechanic"] }),
+        prisma.workTimeEntry.findMany({ select: { mechanicName: true }, distinct: ["mechanicName"] }),
+        prisma.quickEntry.findMany({ select: { mechanicName: true }, distinct: ["mechanicName"] }),
+      ]);
+
+      const matchKey = normalizeCatalogNameKey(oldName);
+      const woVariants = distinctWO.map((r) => r.assignedMechanic).filter((n) => normalizeCatalogNameKey(n) === matchKey);
+      const teVariants = distinctTE.map((r) => r.mechanicName).filter((n) => normalizeCatalogNameKey(n) === matchKey);
+      const qeVariants = distinctQE.map((r) => r.mechanicName).filter((n) => normalizeCatalogNameKey(n) === matchKey);
+
+      await Promise.all([
+        ...woVariants.map((v) => prisma.workOrder.updateMany({ where: { assignedMechanic: v }, data: { assignedMechanic: normalizedName } })),
+        ...teVariants.map((v) => prisma.workTimeEntry.updateMany({ where: { mechanicName: v }, data: { mechanicName: normalizedName } })),
+        ...qeVariants.map((v) => prisma.quickEntry.updateMany({ where: { mechanicName: v }, data: { mechanicName: normalizedName } })),
+      ]);
+    }
 
     return NextResponse.json(mechanic);
   } catch (error) {

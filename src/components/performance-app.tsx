@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { IndustrialEmptyState, IndustrialPanel } from "./ui/industrial-ui";
 
 type MechanicInfo = { name: string; dailyCapacityHours: number };
 type DayData = {
@@ -17,7 +17,7 @@ type MechanicTotal = {
   totalCapacity: number;
   utilizationPct: number;
 };
-type ReportData = {
+type PerformanceData = {
   mode: string;
   periodLabel: string;
   prevRef: string;
@@ -28,15 +28,15 @@ type ReportData = {
 };
 
 const MECHANIC_COLORS = [
-  "bg-cyan-600", "bg-violet-500", "bg-amber-500", "bg-emerald-500",
+  "bg-red-600", "bg-violet-500", "bg-amber-500", "bg-emerald-500",
   "bg-rose-500", "bg-sky-500", "bg-orange-500", "bg-teal-500",
 ];
 const MECHANIC_COLORS_LIGHT = [
-  "bg-cyan-100", "bg-violet-100", "bg-amber-100", "bg-emerald-100",
+  "bg-red-100", "bg-violet-100", "bg-amber-100", "bg-emerald-100",
   "bg-rose-100", "bg-sky-100", "bg-orange-100", "bg-teal-100",
 ];
 const MECHANIC_TEXT = [
-  "text-cyan-700", "text-violet-700", "text-amber-700", "text-emerald-700",
+  "text-red-700", "text-violet-700", "text-amber-700", "text-emerald-700",
   "text-rose-700", "text-sky-700", "text-orange-700", "text-teal-700",
 ];
 
@@ -48,17 +48,17 @@ function today() {
   return `${y}-${m}-${d}`;
 }
 
-export function ReportsApp() {
+export function PerformanceApp() {
   const [mode, setMode] = useState<"week" | "month">("week");
   const [ref, setRef] = useState(today());
   const [capacityContext, setCapacityContext] = useState<number | null>(null);
-  const [data, setData] = useState<ReportData | null>(null);
+  const [data, setData] = useState<PerformanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const todayIso = today();
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const res = await fetch(`/api/reports?mode=${mode}&ref=${ref}`, { cache: "no-store" });
+    const res = await fetch(`/api/performance?mode=${mode}&ref=${ref}`, { cache: "no-store" });
     if (res.ok) setData(await res.json());
     setLoading(false);
   }, [mode, ref]);
@@ -77,8 +77,8 @@ export function ReportsApp() {
 
   if (loading || !data) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-slate-500">Cargando reportes...</p>
+      <div className="flex min-h-[200px] items-center justify-center">
+        <p className="text-slate-500">Cargando performance...</p>
       </div>
     );
   }
@@ -100,46 +100,31 @@ export function ReportsApp() {
   const hourToPx = (hours: number) => (hours / selectedCapacity) * chartHeight;
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 md:px-8">
-      <header className="relative overflow-hidden rounded-3xl border border-cyan-200 bg-[linear-gradient(128deg,#5f969c_0%,#85bec5_58%,#b7dde1_100%)] px-6 py-7 text-white shadow-lg shadow-cyan-200/70">
-        <div className="pointer-events-none absolute -right-10 -top-12 h-44 w-44 rounded-full bg-white/20 blur-3xl" />
-        <div className="relative flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-cyan-100">SEO MECANICA</p>
-            <h1 className="mt-2 text-3xl font-semibold md:text-4xl">Reportes</h1>
-            <p className="mt-2 max-w-3xl text-sm text-cyan-50/95 md:text-base">
-              Horas por mecanico, utilizacion de capacidad y evolucion temporal.
-            </p>
-          </div>
-          <Link href="/" className="rounded-xl border border-cyan-800/40 bg-white/90 px-4 py-2 text-sm font-semibold text-cyan-900 transition hover:bg-white">
-            Volver
-          </Link>
-        </div>
-      </header>
+    <div className="flex flex-col gap-8">
 
       {/* Period navigation */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex rounded-xl border border-slate-200 bg-white p-1">
+        <div className="flex border border-[#CCCCCC] bg-white">
           <button type="button"
-            className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${mode === "week" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}
+            className={`px-4 py-2 text-xs font-bold uppercase tracking-wide transition ${mode === "week" ? "bg-[#33353A] text-white" : "text-[#33353A] hover:bg-[#F0F0F0]"}`}
             onClick={() => { setMode("week"); setRef(today()); }}>
             Semana
           </button>
           <button type="button"
-            className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${mode === "month" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}
+            className={`border-l border-[#CCCCCC] px-4 py-2 text-xs font-bold uppercase tracking-wide transition ${mode === "month" ? "bg-[#33353A] text-white" : "text-[#33353A] hover:bg-[#F0F0F0]"}`}
             onClick={() => { setMode("month"); setRef(today()); }}>
             Mes
           </button>
         </div>
         <div className="flex items-center gap-2">
           <button type="button"
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
+            className="border border-[#CCCCCC] px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-[#33353A] transition hover:bg-[#F0F0F0]"
             onClick={() => setRef(data.prevRef)}>
             &#8592; Anterior
           </button>
-          <span className="text-sm font-medium text-slate-700">{data.periodLabel}</span>
+          <span className="text-xs font-semibold text-[#33353A]">{data.periodLabel}</span>
           <button type="button"
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
+            className="border border-[#CCCCCC] px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-[#33353A] transition hover:bg-[#F0F0F0] disabled:opacity-40"
             onClick={() => setRef(data.nextRef)}
             disabled={data.nextRef > todayIso}>
             Siguiente &#8594;
@@ -149,10 +134,10 @@ export function ReportsApp() {
 
       {/* Leyenda mecanicos */}
       {data.mechanics.length > 0 ? (
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2">
           {mechanicsInContext.map((m, i) => (
-            <span key={m.name} className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${MECHANIC_COLORS_LIGHT[i % MECHANIC_COLORS_LIGHT.length]} ${MECHANIC_TEXT[i % MECHANIC_TEXT.length]}`}>
-              <span className={`inline-block h-2 w-2 rounded-full ${MECHANIC_COLORS[i % MECHANIC_COLORS.length]}`} />
+            <span key={m.name} className={`flex items-center gap-1.5 border border-[#CCCCCC] px-3 py-1 text-xs font-semibold ${MECHANIC_COLORS_LIGHT[i % MECHANIC_COLORS_LIGHT.length]} ${MECHANIC_TEXT[i % MECHANIC_TEXT.length]}`}>
+              <span className={`inline-block h-2 w-2 ${MECHANIC_COLORS[i % MECHANIC_COLORS.length]}`} />
               {m.name} · {m.dailyCapacityHours}h/dia
             </span>
           ))}
@@ -160,38 +145,37 @@ export function ReportsApp() {
       ) : null}
 
       {/* Grafica horas reales vs facturables por dia */}
-      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-7">
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-semibold text-slate-900">Horas reales vs facturables</h2>
-            <p className="mt-1 text-sm text-slate-500">Barra izquierda = reales · barra derecha = facturables · eje Y en horas segun jornada seleccionada</p>
-          </div>
-          {capacityOptions.length > 0 ? (
-            <label className="flex items-center gap-2 text-sm text-slate-600">
-              Contexto de jornada
-              <select
-                value={selectedCapacity}
-                onChange={(e) => setCapacityContext(Number(e.target.value))}
-                className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm font-medium text-slate-700 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200"
-              >
-                {capacityOptions.map((h) => (
-                  <option key={h} value={h}>{h}h/dia</option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-        </div>
+      <IndustrialPanel
+        title="Horas reales vs facturables"
+        headingClassName="flex-wrap"
+        headingChildren={capacityOptions.length > 0 ? (
+          <label className="flex items-center gap-2 text-xs text-white/70">
+            Jornada
+            <select
+              value={selectedCapacity}
+              onChange={(e) => setCapacityContext(Number(e.target.value))}
+              className="border border-white/30 bg-transparent px-2 py-1 text-xs text-white outline-none"
+            >
+              {capacityOptions.map((h) => (
+                <option key={h} value={h} className="bg-[#33353A]">{h}h/dia</option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+      >
+        <p className="border-b border-[#CCCCCC] bg-[#F0F0F0] px-4 py-2 text-xs text-slate-500">Barra izquierda = reales · barra derecha = facturables · eje Y en horas segun jornada seleccionada</p>
 
-        {mechanicsInContext.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">
-            No hay mecanicos activos con jornada de {selectedCapacity}h/dia.
-          </p>
-        ) : data.days.every((d) => mechanicsInContext.every((m) => !d.byMechanic[m.name])) ? (
-          <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">
-            Sin datos para este periodo. Registra tiempos desde el historial de OTs.
-          </p>
-        ) : (
-          <div className="flex gap-4 overflow-x-auto pb-2 pt-2">
+        <div className="p-4 md:p-6">
+          {mechanicsInContext.length === 0 ? (
+            <IndustrialEmptyState>
+              No hay mecanicos activos con jornada de {selectedCapacity}h/dia.
+            </IndustrialEmptyState>
+          ) : data.days.every((d) => mechanicsInContext.every((m) => !d.byMechanic[m.name])) ? (
+            <IndustrialEmptyState>
+              Sin datos para este periodo. Registra tiempos desde el historial de OTs.
+            </IndustrialEmptyState>
+          ) : (
+            <div className="flex gap-4 overflow-x-auto pb-2 pt-2">
             <div className="relative mr-1 w-10 shrink-0 text-[11px] text-slate-500" style={{ height: `${chartTotalHeight}px` }}>
               {yTicks.map((tick) => {
                 const bottom = hourToPx(tick);
@@ -263,21 +247,20 @@ export function ReportsApp() {
                 </div>
               );
             })}
-          </div>
-        )}
-      </section>
-
-      {/* Utilizacion de capacidad por mecanico */}
-      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-7">
-        <h2 className="mb-2 text-xl font-semibold text-slate-900">Utilizacion de capacidad</h2>
-        <p className="mb-5 text-sm text-slate-500">
+            </div>
+          )}
+        </div>
+      </IndustrialPanel>
+      <IndustrialPanel title="Utilizacion de capacidad">
+        <p className="border-b border-[#CCCCCC] bg-[#F0F0F0] px-4 py-2 text-xs text-slate-500">
           Horas facturables del periodo vs horas disponibles segun la jornada configurada por mecanico.
         </p>
 
+        <div className="p-4 md:p-6">
         {data.mechanicTotals.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">
+          <IndustrialEmptyState>
             No hay mecanicos activos con datos en este periodo.
-          </p>
+          </IndustrialEmptyState>
         ) : (
           <div className="space-y-4">
             {data.mechanicTotals.map((m, i) => {
@@ -294,8 +277,8 @@ export function ReportsApp() {
                       </span>
                     </span>
                   </div>
-                  <div className="h-4 w-full overflow-hidden rounded-full bg-slate-100">
-                    <div className={`h-full rounded-full transition-all ${MECHANIC_COLORS[ci]}`} style={{ width: `${pct}%` }} />
+                  <div className="h-3 w-full overflow-hidden bg-[#F0F0F0]">
+                    <div className={`h-full transition-all ${MECHANIC_COLORS[ci]}`} style={{ width: `${pct}%` }} />
                   </div>
                   <div className="mt-1 flex gap-4 text-[11px] text-slate-400">
                     <span>Real: {m.totalActual.toFixed(1)}h</span>
@@ -307,7 +290,8 @@ export function ReportsApp() {
             })}
           </div>
         )}
-      </section>
+        </div>
+      </IndustrialPanel>
     </div>
   );
 }

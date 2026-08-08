@@ -1,10 +1,10 @@
 # Instalacion local en Windows + NSSM (SEO-OT)
 
-Version objetivo de esta guia: `0.2.0`
+Version objetivo de esta guia: `0.3.0`
 
 Guia completa para instalar la aplicacion en un PC del taller (Windows), dejarla accesible por LAN y ejecutarla como servicio para que no dependa de una ventana de consola.
 
-Esta version incorpora carga de tiempos por OT, reportes por semana/mes y configuracion de capacidad diaria por mecanico.
+Esta version incorpora Centro de Analisis (rendimiento, historico por vehiculo/mecanico), Registro Express sin OT, diseno industrial corporativo y optimizaciones de carga.
 
 ## 1) Requisitos previos
 

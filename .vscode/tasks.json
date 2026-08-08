@@ -1,0 +1,28 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Dev Server LAN",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"dev:lan"
+			],
+			"isBackground": true,
+			"group": "build"
+		},
+		{
+			"label": "Dev Server CMD",
+			"type": "shell",
+			"command": "cmd.exe",
+			"args": [
+				"/d",
+				"/c",
+				"npm run dev:lan"
+			],
+			"isBackground": true,
+			"group": "build"
+		}
+	]
+}

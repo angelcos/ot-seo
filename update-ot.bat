@@ -78,12 +78,14 @@ set "BACKUP_DIR=%PROJECT_DIR%\tmp\db-backups"
 set "BACKUP_KEEP=8"
 set "LAST_BACKUP="
 set "DB_BACKUP_DONE=0"
+set "APP_GIT_BRANCH=main"
 set "NEED_INSTALL=0"
 set "NEED_DB=0"
 set "NEED_BUILD=0"
 set "NEED_PRISMA_GENERATE=0"
 set "FORCE_RUNTIME=0"
 set "HAS_RUNTIME_WORK=0"
+set "BAT_CHANGED=0"
 set "OLD_HEAD="
 set "NEW_HEAD="
 set "TMP_CHANGED=%TEMP%\ot-seo-changed-%RANDOM%-%RANDOM%.txt"
@@ -112,6 +114,7 @@ if "%LIMITED_MODE%"=="1" (
 echo Carpeta del proyecto: %PROJECT_DIR%
 echo Host configurado: %APP_HOSTNAME%
 echo IP local detectada: %APP_HOST_IP%
+echo Rama de actualizacion: %APP_GIT_BRANCH%
 if /I "%APP_HOST_IP%"=="127.0.0.1" (
   echo Aviso: No se detecto una IP LAN privada valida. Se usara loopback local.
   echo Aviso: Verifica conexion de red activa Ethernet o Wi-Fi si necesitas acceso desde otros equipos.
@@ -190,10 +193,13 @@ if %errorlevel% equ 0 (
 )
 if exist "%TMP_HEAD%" del /q "%TMP_HEAD%" >nul 2>&1
 
-echo [1/9] Descargando cambios del repositorio...
-"%GIT_CMD%" %GIT_ARGS% -C "%PROJECT_DIR%" pull --ff-only
+echo [1/9] Descargando cambios del repositorio (rama: %APP_GIT_BRANCH%)...
+"%GIT_CMD%" %GIT_ARGS% -C "%PROJECT_DIR%" fetch origin >nul 2>&1
+"%GIT_CMD%" %GIT_ARGS% -C "%PROJECT_DIR%" checkout "%APP_GIT_BRANCH%" 2>nul
+"%GIT_CMD%" %GIT_ARGS% -C "%PROJECT_DIR%" pull --ff-only origin "%APP_GIT_BRANCH%"
 if %errorlevel% neq 0 (
-  echo ERROR: Fallo git pull.
+  echo ERROR: Fallo git pull en rama %APP_GIT_BRANCH%.
+  echo Verifica que la rama existe en el remoto y que no hay cambios locales sin confirmar.
   goto :error
 )
 
@@ -234,6 +240,9 @@ if "%FORCE_RUNTIME%"=="0" (
 
   findstr /I /R /C:"^src/" /C:"^public/" /C:"^next.config.ts$" /C:"^tsconfig.json$" /C:"^postcss.config.mjs$" /C:"^eslint.config.mjs$" /C:"^package.json$" /C:"^package-lock.json$" "%TMP_CHANGED%" >nul
   if !errorlevel! equ 0 set "NEED_BUILD=1"
+
+  findstr /I /C:"update-ot.bat" "%TMP_CHANGED%" >nul 2>&1
+  if !errorlevel! equ 0 set "BAT_CHANGED=1"
 )
 
 if "%ARG_FORCE%"=="1" (
@@ -244,6 +253,21 @@ if "%ARG_FORCE%"=="1" (
 )
 
 if exist "%TMP_CHANGED%" del /q "%TMP_CHANGED%" >nul 2>&1
+
+if "%BAT_CHANGED%"=="1" (
+  echo.
+  echo El script de actualizacion ^(update-ot.bat^) fue modificado en este pull.
+  echo Relanzando con la nueva version para que todos los pasos se ejecuten correctamente...
+  echo.
+  if "%LIMITED_MODE%"=="0" (
+    start "SEO-OT Actualizacion ^(nueva version^)" cmd /k "cd /d "%PROJECT_DIR%" && call "%SCRIPT_FILE%" --elevated --full --force"
+  ) else (
+    start "SEO-OT Actualizacion ^(nueva version^)" cmd /k "cd /d "%PROJECT_DIR%" && call "%SCRIPT_FILE%" --limited"
+  )
+  echo Nueva ventana de actualizacion abierta. Esta ventana se cerrara en 3 segundos...
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Sleep -Seconds 3" >nul 2>&1
+  exit /b 0
+)
 
 if "%NEED_INSTALL%"=="1" set "NEED_BUILD=1"
 if "%NEED_DB%"=="1" (
@@ -493,6 +517,9 @@ for /f "usebackq tokens=1,* delims==" %%A in ("%ENV_FILE%") do (
   )
   if /I "!cfgKey!"=="DATABASE_URL" (
     if defined cfgVal if not "!cfgVal!"=="" set "DATABASE_URL_FROM_ENV=!cfgVal!"
+  )
+  if /I "!cfgKey!"=="APP_GIT_BRANCH" (
+    if defined cfgVal if not "!cfgVal!"=="" set "APP_GIT_BRANCH=!cfgVal!"
   )
 )
 goto :eof
@@ -806,19 +833,23 @@ goto :eof
 if "%DB_SCHEMA_RECOVERED%"=="1" goto :eof
 set "NEED_DB_SCHEMA_RECOVERY=0"
 if exist "%SERVICE_ERR_LOG%" (
-  powershell -NoProfile -ExecutionPolicy Bypass -Command "$tail = Get-Content -Path '%SERVICE_ERR_LOG%' -Tail 160 -ErrorAction SilentlyContinue; $txt = ($tail -join [Environment]::NewLine); if($txt -match 'code: ''P2021''|code: ''P2022''|The table `main.WorkTimeEntry` does not exist|The column `main.Mechanic.dailyCapacityHours` does not exist'){ exit 0 } else { exit 1 }" >nul 2>&1
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "$tail = Get-Content -Path '%SERVICE_ERR_LOG%' -Tail 160 -ErrorAction SilentlyContinue; $txt = ($tail -join [Environment]::NewLine); if($txt -match 'code: .P2021.|code: .P2022.'){ exit 0 } else { exit 1 }" >nul 2>&1
   if %errorlevel% equ 0 set "NEED_DB_SCHEMA_RECOVERY=1"
 )
 if "%NEED_DB_SCHEMA_RECOVERY%"=="0" if exist "%SERVICE_OUT_LOG%" (
-  powershell -NoProfile -ExecutionPolicy Bypass -Command "$tail = Get-Content -Path '%SERVICE_OUT_LOG%' -Tail 160 -ErrorAction SilentlyContinue; $txt = ($tail -join [Environment]::NewLine); if($txt -match 'code: ''P2021''|code: ''P2022''|The table `main.WorkTimeEntry` does not exist|The column `main.Mechanic.dailyCapacityHours` does not exist'){ exit 0 } else { exit 1 }" >nul 2>&1
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "$tail = Get-Content -Path '%SERVICE_OUT_LOG%' -Tail 160 -ErrorAction SilentlyContinue; $txt = ($tail -join [Environment]::NewLine); if($txt -match 'code: .P2021.|code: .P2022.'){ exit 0 } else { exit 1 }" >nul 2>&1
   if %errorlevel% equ 0 set "NEED_DB_SCHEMA_RECOVERY=1"
 )
 if "%NEED_DB_SCHEMA_RECOVERY%"=="0" goto :eof
 
 echo.
-echo Detectado desfase de esquema DB (P2021/P2022 o tabla/columna faltante). Ejecutando db:push...
+echo Detectado desfase de esquema DB (P2021/P2022 - tabla o columna faltante). Ejecutando db:generate + db:push...
 call :backup_database_once
 call :normalize_database_url
+call "%NPM_CMD%" run db:generate
+if %errorlevel% neq 0 (
+  echo Aviso: db:generate fallo en recovery; se continua con db:push de todas formas.
+)
 call "%NPM_CMD%" run db:push -- --accept-data-loss
 if %errorlevel% neq 0 (
   echo ERROR: Fallo npm run db:push durante la recuperacion automatica de esquema.

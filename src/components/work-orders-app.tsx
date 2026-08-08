@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { BrandDTO, MechanicDTO, WorkOrderDTO } from "@/lib/work-orders";
+import { QuickEntryModal } from "./quick-entry-modal";
+import { IndustrialAlert, IndustrialBadge, IndustrialButton, IndustrialCombobox, IndustrialEmptyState, IndustrialHeader, IndustrialHeaderActionButton, IndustrialHeaderActionLink, IndustrialInput, IndustrialPanel, IndustrialSelect, IndustrialStatCard, IndustrialTextarea } from "./ui/industrial-ui";
 
 type WorkOrderStatus = "PENDING" | "IN_PROGRESS" | "DONE" | "DELIVERED" | "CANCELED";
 
@@ -50,6 +53,7 @@ export function WorkOrdersApp({
   initialBrands: BrandDTO[];
   totalOrderCount: number;
 }) {
+  const searchParams = useSearchParams();
   const [form, setForm] = useState<FormState>(initialForm);
   const [orders, setOrders] = useState<WorkOrderDTO[]>(initialOrders);
   const [mechanics] = useState<MechanicDTO[]>(initialMechanics);
@@ -58,11 +62,13 @@ export function WorkOrdersApp({
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
   const [savingOrderId, setSavingOrderId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState(() => searchParams.get("mechanic") ?? "all");
+  const [plateFilter, setPlateFilter] = useState(() => searchParams.get("plate")?.toUpperCase() ?? "");
   const [currentPage, setCurrentPage] = useState(1);
   const [loadAll, setLoadAll] = useState(false);
   const [isLoadingAll, setIsLoadingAll] = useState(false);
   const [timeEntryModal, setTimeEntryModal] = useState<{ orderId: number; orderNumber: string } | null>(null);
+  const [quickEntryOpen, setQuickEntryOpen] = useState(false);
 
   const hasMore = !loadAll && totalOrderCount > orders.length;
 
@@ -134,14 +140,18 @@ export function WorkOrdersApp({
   }, [orders]);
 
   const filteredOrders = useMemo(() => {
+    let result = orders;
+    if (plateFilter) {
+      result = result.filter((order) => order.vehiclePlate?.toUpperCase() === plateFilter);
+    }
     if (filter === "all") {
-      return orders;
+      return result;
     }
     if (filter === "unassigned") {
-      return orders.filter((order) => !order.assignedMechanic.trim());
+      return result.filter((order) => !order.assignedMechanic.trim());
     }
-    return orders.filter((order) => order.assignedMechanic === filter);
-  }, [orders, filter]);
+    return result.filter((order) => order.assignedMechanic === filter);
+  }, [orders, filter, plateFilter]);
 
   const pageCount = Math.max(1, Math.ceil(filteredOrders.length / PAGE_SIZE));
   const safePage = Math.min(currentPage, pageCount);
@@ -306,7 +316,10 @@ export function WorkOrdersApp({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 md:px-8">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 pb-8">
+      {quickEntryOpen ? (
+        <QuickEntryModal mechanics={activeMechanics} onClose={() => setQuickEntryOpen(false)} />
+      ) : null}
       {timeEntryModal ? (
         <TimeEntryModal
           orderId={timeEntryModal.orderId}
@@ -316,59 +329,50 @@ export function WorkOrdersApp({
           onUpdated={handleTimeEntriesUpdated}
         />
       ) : null}
-      <header className="relative overflow-hidden rounded-3xl border border-cyan-200 bg-[linear-gradient(128deg,#5f969c_0%,#85bec5_58%,#b7dde1_100%)] px-6 py-7 text-white shadow-lg shadow-cyan-200/70">
-        <div className="pointer-events-none absolute -right-10 -top-12 h-44 w-44 rounded-full bg-white/20 blur-3xl" />
-        <div className="relative flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-cyan-100">SEO MECANICA</p>
-            <h1 className="mt-2 text-3xl font-semibold md:text-4xl">Ordenes de Trabajo</h1>
-            <p className="mt-2 max-w-3xl text-sm text-cyan-50/95 md:text-base">
-              Registra la OT al recibir el vehiculo, asigna mecanico y genera el PDF cuando este listo.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Link
-              href="/reportes"
-              className="rounded-xl border border-cyan-800/40 bg-white/90 px-4 py-2 text-sm font-semibold text-cyan-900 transition hover:bg-white"
-            >
-              Reportes
-            </Link>
-            <Link
-              href="/configuracion"
-              className="rounded-xl border border-cyan-800/40 bg-white/90 px-4 py-2 text-sm font-semibold text-cyan-900 transition hover:bg-white"
-            >
-              Configuracion
-            </Link>
-          </div>
+      <IndustrialHeader
+        title="Ordenes de Trabajo"
+        actionsClassName="gap-1 md:gap-2"
+        actions={(
+          <>
+            <IndustrialHeaderActionButton onClick={() => setQuickEntryOpen(true)}>
+              + Express
+            </IndustrialHeaderActionButton>
+            <IndustrialHeaderActionLink href="/analisis">Análisis</IndustrialHeaderActionLink>
+            <IndustrialHeaderActionLink href="/configuracion">Config</IndustrialHeaderActionLink>
+          </>
+        )}
+      />
+
+      {/* Franja de estadísticas rápidas */}
+      <IndustrialPanel title="Resumen">
+        <div className="grid grid-cols-2 gap-px bg-[#CCCCCC] md:grid-cols-4">
+          <IndustrialStatCard label="OT Totales" value={String(totalOrderCount)} detail="Historial completo" className="border-0 px-4 py-4" valueClassName="text-3xl" />
+          <IndustrialStatCard label="OT Activas" value={String(activeOrders.length)} detail="Pendiente y en curso" className="border-0 px-4 py-4" valueClassName="text-3xl" />
+          <IndustrialStatCard label="Sin asignar" value={String(unassignedCount)} detail="En espera de mecánico" className="border-0 px-4 py-4" valueClassName="text-3xl" />
+          <IndustrialStatCard label="Mecánicos activos" value={String(activeMechanics.length)} detail="Disponibles" className="border-0 px-4 py-4" valueClassName="text-3xl" />
         </div>
-      </header>
+      </IndustrialPanel>
 
-      <section className="grid gap-4 md:grid-cols-4">
-        <StatCard title="OT Totales" value={String(totalOrderCount)} detail="Historial completo" />
-        <StatCard title="OT Activas" value={String(activeOrders.length)} detail="Pendiente y en curso" />
-        <StatCard title="Sin asignar" value={String(unassignedCount)} detail="En espera de mecanico" />
-        <StatCard title="Mecanicos activos" value={String(activeMechanics.length)} detail="Disponibles" />
-      </section>
-
-      <section className="rounded-3xl border border-cyan-100 bg-white p-5 shadow-sm md:p-7">
-        <h2 className="text-xl font-semibold text-slate-900">Carga Rapida por Mecanico</h2>
-        <p className="mb-4 text-sm text-slate-600">
-          Esta vista se recalcula automaticamente en cada cambio de asignacion o estado.
-        </p>
-
-        {quickLoad.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-            No hay OT activas.
+      {/* Carga rápida por mecánico */}
+      <IndustrialPanel title="Carga Rapida por Mecanico">
+        <div className="p-4">
+          <p className="mb-3 text-xs text-slate-500">
+            Esta vista se recalcula automaticamente en cada cambio de asignacion o estado.
           </p>
-        ) : (
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {quickLoad.map((item) => (
-              <article key={item.name} className="rounded-2xl border border-cyan-100 bg-cyan-50/40 p-4">
+
+          {quickLoad.length === 0 ? (
+            <IndustrialEmptyState className="py-6 text-left">
+              No hay OT activas.
+            </IndustrialEmptyState>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {quickLoad.map((item) => (
+                <article key={item.name} className="border border-[#CCCCCC] bg-[#F0F0F0] p-4">
                 <div className="flex items-start justify-between gap-3">
                   <h3 className="text-lg font-semibold text-slate-900">{item.name}</h3>
-                  <span className="rounded-full bg-cyan-700 px-2.5 py-1 text-xs font-semibold text-white">
+                  <IndustrialBadge variant="red">
                     {item.count} OT
-                  </span>
+                  </IndustrialBadge>
                 </div>
                 <p className="mt-2 text-xs uppercase tracking-wide text-slate-500">Ultima OT activa</p>
                 <p className="text-sm font-semibold text-slate-900">{item.latestOrder}</p>
@@ -377,20 +381,22 @@ export function WorkOrdersApp({
             ))}
           </div>
         )}
-      </section>
-
-      <section ref={formSectionRef} className="grid gap-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:grid-cols-2 md:p-7">
+        </div>
+      </IndustrialPanel>
+      <IndustrialPanel
+        ref={formSectionRef}
+        accent="red"
+        title={editingOrderId !== null ? "Editar Orden de Trabajo" : "Nueva Orden de Trabajo"}
+      >
+        <div className="grid gap-5 p-4 md:grid-cols-2">
         <div>
-          <h2 className="text-xl font-semibold text-slate-900">
-            {editingOrderId !== null ? "Editar OT" : "Nueva OT"}
-          </h2>
-          <p className="mt-1 text-sm text-slate-600">
+          <p className="text-sm text-slate-500">
             {editingOrderId !== null
               ? "Modifica cualquier campo y pulsa Actualizar OT para guardar los cambios."
               : "Obligatorios: cliente, telefono, marca y modelo. El mecanico se puede asignar despues."}
           </p>
         </div>
-        <div className="rounded-2xl border border-cyan-100 bg-cyan-50 p-4 text-sm text-slate-700">
+        <div className="border border-[#CCCCCC] bg-[#F0F0F0] p-3 text-sm text-slate-700">
           {editingOrderId !== null
             ? "Puedes modificar cualquier campo de la OT antes de imprimir el PDF."
             : "Completa el formulario y guarda la OT. Desde el historial puedes generar e imprimir el PDF."}
@@ -398,87 +404,153 @@ export function WorkOrdersApp({
 
         <form className="grid gap-4 md:col-span-2" onSubmit={handleSubmit}>
           <div className="grid gap-4 md:grid-cols-3">
-            <Input label="Cliente" value={form.customerName} onChange={(v) => handleChange("customerName", v)} required />
-            <Input label="Telefono" value={form.customerPhone} onChange={(v) => handleChange("customerPhone", v)} required />
-            <Select
-              label="Mecanico asignado"
-              value={form.assignedMechanic}
-              onChange={(v) => handleChange("assignedMechanic", v)}
-              options={[{ value: "", label: "Sin asignar" }, ...activeMechanics.map((m) => ({ value: m, label: m }))]}
+            <IndustrialInput
+              label="Cliente"
+              wrapperClassName="text-sm text-slate-700"
+              labelClassName="font-medium"
+              value={form.customerName}
+              onChange={(e) => handleChange("customerName", e.target.value)}
+              required
             />
+            <IndustrialInput
+              label="Telefono"
+              wrapperClassName="text-sm text-slate-700"
+              labelClassName="font-medium"
+              value={form.customerPhone}
+              onChange={(e) => handleChange("customerPhone", e.target.value)}
+              required
+            />
+            <IndustrialSelect
+              label="Mecanico asignado"
+              wrapperClassName="text-sm text-slate-700"
+              labelClassName="font-medium"
+              value={form.assignedMechanic}
+              onChange={(e) => handleChange("assignedMechanic", e.target.value)}
+            >
+              <option value="">Sin asignar</option>
+              {activeMechanics.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </IndustrialSelect>
           </div>
 
           <div className="grid gap-4 md:grid-cols-5">
-            <Input
+            <IndustrialInput
               label="Matricula"
+              wrapperClassName="text-sm text-slate-700"
+              labelClassName="font-medium"
               value={form.vehiclePlate}
-              onChange={(v) => handleChange("vehiclePlate", v.toUpperCase())}
+              onChange={(e) => handleChange("vehiclePlate", e.target.value.toUpperCase())}
               maxLength={12}
             />
-            <Combobox
+            <IndustrialCombobox
               label="Marca"
               value={form.vehicleBrand}
               onChange={(v) => handleChange("vehicleBrand", v)}
               options={brandOptions}
+              wrapperClassName="text-sm text-slate-700"
+              labelClassName="font-medium"
+              placeholder="Escribe para buscar una marca"
+              noMatchesText="No hay coincidencias en marcas registradas."
               required
             />
-            <Input label="Modelo" value={form.vehicleModel} onChange={(v) => handleChange("vehicleModel", v)} required />
-            <Input label="Ano" value={form.vehicleYear} onChange={(v) => handleChange("vehicleYear", v)} />
-            <Input label="Kilometros" type="number" value={form.mileage} onChange={(v) => handleChange("mileage", v)} />
+            <IndustrialInput
+              label="Modelo"
+              wrapperClassName="text-sm text-slate-700"
+              labelClassName="font-medium"
+              value={form.vehicleModel}
+              onChange={(e) => handleChange("vehicleModel", e.target.value)}
+              required
+            />
+            <IndustrialInput
+              label="Ano"
+              wrapperClassName="text-sm text-slate-700"
+              labelClassName="font-medium"
+              value={form.vehicleYear}
+              onChange={(e) => handleChange("vehicleYear", e.target.value)}
+            />
+            <IndustrialInput
+              label="Kilometros"
+              wrapperClassName="text-sm text-slate-700"
+              labelClassName="font-medium"
+              type="number"
+              value={form.mileage}
+              onChange={(e) => handleChange("mileage", e.target.value)}
+            />
           </div>
 
-          <Textarea
+          <IndustrialTextarea
             label="Averia reportada por el cliente"
+            wrapperClassName="text-sm text-slate-700"
+            labelClassName="font-medium"
             value={form.issueDescription}
-            onChange={(v) => handleChange("issueDescription", v)}
+            onChange={(e) => handleChange("issueDescription", e.target.value)}
             placeholder="(Opcional)"
           />
 
           {error ? (
             <div className="grid gap-2">
-              <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+              <IndustrialAlert variant="danger">{error}</IndustrialAlert>
               {showBrandCatalogHint ? (
-                <p className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                <IndustrialAlert variant="success" className="flex items-start gap-2">
                   <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">
                     i
                   </span>
                   <span>
                     Si la marca no existe, puedes anadirla desde <Link href="/configuracion" className="font-medium underline underline-offset-2 hover:text-emerald-900">Configuracion</Link>. El modelo debe ir en su campo separado.
                   </span>
-                </p>
+                </IndustrialAlert>
               ) : null}
             </div>
           ) : null}
 
           <div className="flex items-center gap-3">
-            <button
+            <IndustrialButton
               type="submit"
-              className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              variant="primary"
+              size="lg"
               disabled={isCreating}
             >
               {isCreating
                 ? editingOrderId !== null ? "Actualizando..." : "Guardando..."
                 : editingOrderId !== null ? "Actualizar OT" : "Guardar OT"}
-            </button>
+            </IndustrialButton>
             {editingOrderId !== null ? (
-              <button
+              <IndustrialButton
                 type="button"
-                className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+                variant="secondary"
+                size="lg"
                 onClick={handleCancelEdit}
               >
                 Cancelar edicion
-              </button>
+              </IndustrialButton>
             ) : null}
           </div>
         </form>
-      </section>
+        </div>
+      </IndustrialPanel>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-7">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-xl font-semibold text-slate-900">Historial de Ordenes de Trabajo</h2>
+      <IndustrialPanel
+        id="work-orders-section"
+        title="Historial de Ordenes de Trabajo"
+        headingChildren={(
           <div className="flex items-center gap-2">
+            {plateFilter ? (
+              <span className="flex items-center gap-1 border border-white/30 px-2 py-1 text-xs text-white">
+                Placa: {plateFilter}
+                <button
+                  type="button"
+                  onClick={() => { setPlateFilter(""); setCurrentPage(1); }}
+                  className="ml-1 text-white/70 hover:text-white"
+                  title="Quitar filtro de placa"
+                >
+                  ×
+                </button>
+              </span>
+            ) : null}
             <select
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+              style={{ backgroundColor: "#33353A", color: "white", border: "1px solid rgba(255,255,255,0.3)" }}
+              className="w-40 px-3 py-1.5 text-xs outline-none"
               value={filter}
               onChange={(event) => changeFilter(event.target.value)}
             >
@@ -490,36 +562,18 @@ export function WorkOrdersApp({
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
-              onClick={() => refreshOrders(loadAll).catch(() => setError("No se pudo recargar la lista"))}
-            >
+            <IndustrialHeaderActionButton onClick={() => refreshOrders(loadAll).catch(() => setError("No se pudo recargar la lista"))}>
               Actualizar
-            </button>
+            </IndustrialHeaderActionButton>
           </div>
-        </div>
-
-        {hasMore ? (
-          <div className="mb-4 flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
-            <span className="text-amber-800">
-              Mostrando los ultimos 6 meses ({orders.length} de {totalOrderCount} OTs).
-            </span>
-            <button
-              type="button"
-              className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-60"
-              onClick={() => void handleLoadAll()}
-              disabled={isLoadingAll}
-            >
-              {isLoadingAll ? "Cargando..." : "Ver historial completo"}
-            </button>
-          </div>
-        ) : null}
+        )}
+      >
+        <div className="p-4">
 
         {filteredOrders.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+          <IndustrialEmptyState className="rounded-2xl border-slate-300 bg-slate-50 px-4 py-6 text-left">
             No hay OT para el filtro seleccionado.
-          </p>
+          </IndustrialEmptyState>
         ) : (
           <>
             <div className="overflow-x-auto">
@@ -559,28 +613,50 @@ export function WorkOrdersApp({
                   Pagina {safePage} de {pageCount} &bull; {filteredOrders.length} OT
                 </p>
                 <div className="flex gap-2">
-                  <button
+                  <IndustrialButton
                     type="button"
-                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    variant="secondary"
+                    size="sm"
+                    className="text-sm disabled:opacity-40"
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={safePage === 1}
                   >
                     Anterior
-                  </button>
-                  <button
+                  </IndustrialButton>
+                  <IndustrialButton
                     type="button"
-                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    variant="secondary"
+                    size="sm"
+                    className="text-sm disabled:opacity-40"
                     onClick={() => setCurrentPage((p) => Math.min(pageCount, p + 1))}
                     disabled={safePage === pageCount}
                   >
                     Siguiente
-                  </button>
+                  </IndustrialButton>
                 </div>
               </div>
             ) : null}
           </>
         )}
-      </section>
+
+        {hasMore ? (
+          <IndustrialAlert variant="warning" className="mt-4 flex items-center justify-between rounded-2xl px-4 py-3">
+            <span className="text-amber-800">
+              Mostrando los ultimos 6 meses ({orders.length} de {totalOrderCount} OTs).
+            </span>
+            <IndustrialButton
+              type="button"
+              variant="warning"
+              size="sm"
+              onClick={() => void handleLoadAll()}
+              disabled={isLoadingAll}
+            >
+              {isLoadingAll ? "Cargando..." : "Ver historial completo"}
+            </IndustrialButton>
+          </IndustrialAlert>
+        ) : null}
+        </div>
+      </IndustrialPanel>
     </div>
   );
 }
@@ -608,14 +684,14 @@ function OrderRow({
   const displayStatus: WorkOrderStatus = order.status === "DELIVERED" ? "DONE" : order.status;
 
   return (
-    <tr className={`border-b border-slate-100 text-slate-700 ${isEditing ? "bg-cyan-50" : ""}`}>
+    <tr className={`border-b border-slate-100 text-slate-700 ${isEditing ? "bg-red-50" : ""}`}>
       <td className="px-2 py-3 font-semibold text-slate-900">{order.number}</td>
       <td className="px-2 py-3">{new Date(order.createdAt).toLocaleString("es-ES")}</td>
       <td className="px-2 py-3">{order.customerName}</td>
       <td className="px-2 py-3">{[order.vehicleBrand, order.vehicleModel, order.vehiclePlate].filter(Boolean).join(" ")}</td>
       <td className="px-2 py-3">
-        <select
-          className="w-44 rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm"
+        <IndustrialSelect
+          className="w-44 rounded-lg px-2 py-1 text-sm"
           value={order.assignedMechanic}
           onChange={(event) => {
             const value = event.target.value;
@@ -629,10 +705,11 @@ function OrderRow({
               {name}
             </option>
           ))}
-        </select>
+        </IndustrialSelect>
       </td>
       <td className="px-2 py-3">
-        <select
+        <IndustrialSelect
+          className="rounded-lg px-2 py-1 text-sm"
           value={displayStatus}
           onChange={(event) => {
             const value = event.target.value as WorkOrderStatus;
@@ -645,7 +722,7 @@ function OrderRow({
               {option.label}
             </option>
           ))}
-        </select>
+        </IndustrialSelect>
       </td>
       <td className="px-2 py-3">
         <button
@@ -653,7 +730,7 @@ function OrderRow({
           onClick={() => onOpenTimeEntries(order.id, order.number)}
           className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-700 transition hover:bg-slate-100"
         >
-          <span className="font-semibold text-slate-900">{order.timeEntriesCount}</span>
+          <IndustrialBadge variant="slate" className="px-2 py-0.5 normal-case text-slate-900">{order.timeEntriesCount}</IndustrialBadge>
           <span>entradas</span>
           {order.timeEntriesActualHours > 0 ? (
             <span className="text-slate-500">&middot;&nbsp;{order.timeEntriesActualHours.toFixed(1)}h</span>
@@ -662,214 +739,29 @@ function OrderRow({
       </td>
       <td className="px-2 py-3 text-right">
         <div className="flex items-center justify-end gap-2">
-          <button
+          <IndustrialButton
             type="button"
             onClick={() => onEdit(order)}
             disabled={isSaving}
-            className="rounded-lg border border-amber-300 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-50 disabled:opacity-50"
+            variant="warning"
+            size="md"
+            className="disabled:opacity-50"
           >
             Editar
-          </button>
-          <button
+          </IndustrialButton>
+          <IndustrialButton
             type="button"
             onClick={() => {
               window.open(`/api/work-orders/${order.id}/pdf?ts=${Date.now()}`, "_blank", "noopener,noreferrer");
             }}
-            className="rounded-lg border border-cyan-300 px-3 py-2 text-xs font-semibold text-cyan-700 transition hover:bg-cyan-50"
+            variant="danger"
+            size="md"
           >
             Ver PDF
-          </button>
+          </IndustrialButton>
         </div>
       </td>
     </tr>
-  );
-}
-
-function StatCard({ title, value, detail }: { title: string; value: string; detail: string }) {
-  return (
-    <article className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
-      <p className="text-xs uppercase tracking-wide text-slate-500">{title}</p>
-      <p className="mt-1 text-2xl font-semibold text-slate-900">{value}</p>
-      <p className="text-xs text-slate-500">{detail}</p>
-    </article>
-  );
-}
-
-function Input({
-  label,
-  value,
-  onChange,
-  required,
-  type = "text",
-  maxLength,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  required?: boolean;
-  type?: React.HTMLInputTypeAttribute;
-  maxLength?: number;
-}) {
-  return (
-    <label className="grid gap-1 text-sm text-slate-700">
-      <span className="font-medium">{label}</span>
-      <input
-        className="rounded-xl border border-slate-300 bg-white px-3 py-2 outline-none transition focus:border-cyan-600"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        required={required}
-        type={type}
-        maxLength={maxLength}
-      />
-    </label>
-  );
-}
-
-function Select({
-  label,
-  value,
-  onChange,
-  options,
-  required,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: Array<{ value: string; label: string }>;
-  required?: boolean;
-}) {
-  return (
-    <label className="grid gap-1 text-sm text-slate-700">
-      <span className="font-medium">{label}</span>
-      <select
-        className="rounded-xl border border-slate-300 bg-white px-3 py-2 outline-none transition focus:border-cyan-600"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        required={required}
-      >
-        {options.map((option) => (
-          <option key={option.value || "none"} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function Combobox({
-  label,
-  value,
-  onChange,
-  options,
-  required,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: Array<{ value: string; label: string }>;
-  required?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-
-  const searchableOptions = useMemo(
-    () => options.filter((option) => option.value !== ""),
-    [options],
-  );
-
-  const filteredOptions = useMemo(() => {
-    const query = value.trim().toLocaleLowerCase("es-ES");
-    if (!query) {
-      return searchableOptions.slice(0, 12);
-    }
-
-    return searchableOptions
-      .filter((option) => option.label.toLocaleLowerCase("es-ES").includes(query))
-      .slice(0, 12);
-  }, [searchableOptions, value]);
-
-  function normalizeToValidOption(rawValue: string) {
-    const normalized = rawValue.trim().toLocaleLowerCase("es-ES");
-    if (!normalized) {
-      onChange("");
-      return;
-    }
-
-    const exact = searchableOptions.find(
-      (option) => option.value.toLocaleLowerCase("es-ES") === normalized || option.label.toLocaleLowerCase("es-ES") === normalized,
-    );
-
-    onChange(exact ? exact.value : "");
-  }
-
-  return (
-    <div className="relative grid gap-1 text-sm text-slate-700">
-      <span className="font-medium">{label}</span>
-      <input
-        className="rounded-xl border border-slate-300 bg-white px-3 py-2 outline-none transition focus:border-cyan-600"
-        value={value}
-        onChange={(event) => {
-          onChange(event.target.value);
-          setOpen(true);
-        }}
-        onFocus={() => setOpen(true)}
-        onBlur={() => {
-          window.setTimeout(() => {
-            normalizeToValidOption(value);
-            setOpen(false);
-          }, 120);
-        }}
-        placeholder="Escribe para buscar una marca"
-        required={required}
-        autoComplete="off"
-      />
-      {open ? (
-        filteredOptions.length > 0 ? (
-          <ul className="absolute left-0 top-full z-20 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
-            {filteredOptions.map((option) => (
-              <li
-                key={option.value}
-                className="cursor-pointer px-3 py-2 text-slate-700 hover:bg-cyan-50 hover:text-slate-900"
-                onMouseDown={() => {
-                  onChange(option.value);
-                  setOpen(false);
-                }}
-              >
-                {option.label}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className="absolute left-0 top-full z-20 mt-1 w-full rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 shadow-lg">
-            No hay coincidencias en marcas registradas.
-          </div>
-        )
-      ) : null}
-    </div>
-  );
-}
-
-function Textarea({
-  label,
-  value,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-}) {
-  return (
-    <label className="grid gap-1 text-sm text-slate-700">
-      <span className="font-medium">{label}</span>
-      <textarea
-        className="min-h-24 rounded-xl border border-slate-300 bg-white px-3 py-2 outline-none transition focus:border-cyan-600"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-      />
-    </label>
   );
 }
 
@@ -966,16 +858,16 @@ function TimeEntryModal({
             <h3 className="text-base font-semibold text-slate-900">Tiempos — {orderNumber}</h3>
             <p className="text-xs text-slate-500">Registra bloques de trabajo por mecanico y dia</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-slate-100">Cerrar</button>
+          <IndustrialButton type="button" variant="ghost" size="sm" className="text-sm text-slate-500" onClick={onClose}>Cerrar</IndustrialButton>
         </div>
 
         <div className="flex-1 overflow-auto px-6 py-4">
           {loading ? (
             <p className="text-sm text-slate-500">Cargando...</p>
           ) : entries.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-slate-200 py-4 text-center text-sm text-slate-400">
+            <IndustrialEmptyState className="rounded-xl border-slate-200 bg-white py-4 text-slate-400">
               Sin registros de tiempo aun
-            </p>
+            </IndustrialEmptyState>
           ) : (
             <ul className="space-y-2">
               {entries.map((entry) => (
@@ -988,56 +880,90 @@ function TimeEntryModal({
                     <span className="text-slate-700">{entry.actualHours}h real / {entry.billableHours}h fact.</span>
                     {entry.notes ? <p className="mt-0.5 text-xs text-slate-500">{entry.notes}</p> : null}
                   </div>
-                  <button type="button" onClick={() => void handleDelete(entry.id)} disabled={saving}
-                    className="shrink-0 rounded-lg px-2 py-1 text-xs text-red-500 hover:bg-red-50 disabled:opacity-40">
+                  <IndustrialButton
+                    type="button"
+                    onClick={() => void handleDelete(entry.id)}
+                    disabled={saving}
+                    variant="danger"
+                    size="sm"
+                    className="shrink-0 border-0 px-2 py-1 text-red-500 disabled:opacity-40"
+                  >
                     Eliminar
-                  </button>
+                  </IndustrialButton>
                 </li>
               ))}
             </ul>
           )}
 
-          {error ? <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
+          {error ? <IndustrialAlert variant="danger" className="mt-3">{error}</IndustrialAlert> : null}
         </div>
 
         <form className="border-t border-slate-100 px-6 py-4" onSubmit={(e) => void handleAdd(e)}>
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Nuevo registro</p>
           <div className="grid grid-cols-2 gap-3">
-            <label className="grid gap-1 text-xs text-slate-700">
-              <span className="font-medium">Mecanico</span>
-              <select className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-cyan-600"
-                value={form.mechanicName} onChange={(e) => setForm((p) => ({ ...p, mechanicName: e.target.value }))} required>
-                {mechanicOptions.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </label>
-            <label className="grid gap-1 text-xs text-slate-700">
-              <span className="font-medium">Fecha</span>
-              <input type="date" className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-cyan-600"
-                value={form.date} onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))} required />
-            </label>
-            <label className="grid gap-1 text-xs text-slate-700">
-              <span className="font-medium">Horas reales</span>
-              <input type="number" min="0.5" step="0.5" max="24" placeholder="ej: 3.5"
-                className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-cyan-600"
-                value={form.actualHours} onChange={(e) => setForm((p) => ({ ...p, actualHours: e.target.value }))} required />
-            </label>
-            <label className="grid gap-1 text-xs text-slate-700">
-              <span className="font-medium">Horas facturables</span>
-              <input type="number" min="0" step="0.5" max="24" placeholder="ej: 4"
-                className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-cyan-600"
-                value={form.billableHours} onChange={(e) => setForm((p) => ({ ...p, billableHours: e.target.value }))} required />
-            </label>
-            <label className="col-span-2 grid gap-1 text-xs text-slate-700">
-              <span className="font-medium">Nota (opcional)</span>
-              <input type="text" placeholder="Descripcion del trabajo realizado..."
-                className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-cyan-600"
-                value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} />
-            </label>
+            <IndustrialSelect
+              label="Mecanico"
+              wrapperClassName="text-xs text-slate-700"
+              labelClassName="font-medium"
+              className="rounded-lg px-2 py-1.5"
+              value={form.mechanicName}
+              onChange={(e) => setForm((p) => ({ ...p, mechanicName: e.target.value }))}
+              required
+            >
+              {mechanicOptions.map((m) => <option key={m} value={m}>{m}</option>)}
+            </IndustrialSelect>
+            <IndustrialInput
+              label="Fecha"
+              wrapperClassName="text-xs text-slate-700"
+              labelClassName="font-medium"
+              type="date"
+              className="rounded-lg px-2 py-1.5"
+              value={form.date}
+              onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))}
+              required
+            />
+            <IndustrialInput
+              label="Horas reales"
+              wrapperClassName="text-xs text-slate-700"
+              labelClassName="font-medium"
+              type="number"
+              min="0.5"
+              step="0.5"
+              max="24"
+              placeholder="ej: 3.5"
+              className="rounded-lg px-2 py-1.5"
+              value={form.actualHours}
+              onChange={(e) => setForm((p) => ({ ...p, actualHours: e.target.value }))}
+              required
+            />
+            <IndustrialInput
+              label="Horas facturables"
+              wrapperClassName="text-xs text-slate-700"
+              labelClassName="font-medium"
+              type="number"
+              min="0"
+              step="0.5"
+              max="24"
+              placeholder="ej: 4"
+              className="rounded-lg px-2 py-1.5"
+              value={form.billableHours}
+              onChange={(e) => setForm((p) => ({ ...p, billableHours: e.target.value }))}
+              required
+            />
+            <IndustrialInput
+              label="Nota (opcional)"
+              wrapperClassName="col-span-2 text-xs text-slate-700"
+              labelClassName="font-medium"
+              type="text"
+              placeholder="Descripcion del trabajo realizado..."
+              className="rounded-lg px-2 py-1.5"
+              value={form.notes}
+              onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+            />
           </div>
-          <button type="submit" disabled={saving}
-            className="mt-3 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60">
+          <IndustrialButton type="submit" disabled={saving} variant="primary" size="md" className="mt-3">
             {saving ? "Guardando..." : "Guardar registro"}
-          </button>
+          </IndustrialButton>
         </form>
       </div>
     </div>

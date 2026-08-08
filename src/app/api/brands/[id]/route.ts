@@ -45,6 +45,9 @@ export async function PATCH(
   }
 
   try {
+    const current = await prisma.brand.findUnique({ where: { id: parsedId }, select: { name: true } });
+    const oldName = current?.name;
+
     const brand = await prisma.brand.update({
       where: { id: parsedId },
       data: {
@@ -52,6 +55,18 @@ export async function PATCH(
         ...(parsed.data.isActive !== undefined ? { isActive: parsed.data.isActive } : {}),
       },
     });
+
+    // Cascade name change to work orders (covers case-only renames like "OPEL" → "Opel")
+    if (normalizedName !== undefined && oldName && oldName !== normalizedName) {
+      const distinctBrands = await prisma.workOrder.findMany({
+        select: { vehicleBrand: true },
+        distinct: ["vehicleBrand"],
+      });
+      const variants = distinctBrands.map((r) => r.vehicleBrand).filter((b) => normalizeCatalogNameKey(b) === normalizeCatalogNameKey(oldName));
+      for (const variant of variants) {
+        await prisma.workOrder.updateMany({ where: { vehicleBrand: variant }, data: { vehicleBrand: normalizedName } });
+      }
+    }
 
     return NextResponse.json(brand);
   } catch (error) {
